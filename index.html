@@ -1,1 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Submit a Cover - Cozy Cover Community</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #FDF5E6; color: #333; text-align: center; padding: 50px 20px; }
+        .upload-container { max-width: 500px; margin: 0 auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 3px solid #7a0000; }
+        h1 { color: #7a0000; margin-bottom: 5px; font-family: Georgia, serif; }
+        p { color: #555; font-size: 14px; margin-bottom: 30px; }
+        .dropzone { border: 2px dashed #7a0000; padding: 30px; border-radius: 8px; background: #FFFDF9; cursor: pointer; transition: 0.2s; position: relative; }
+        .dropzone:hover { background: #FFF5F5; }
+        input[type="file"] { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+        .btn { background-color: #7a0000; color: white; border: none; padding: 12px 30px; font-size: 16px; font-weight: bold; border-radius: 6px; cursor: pointer; margin-top: 20px; width: 100%; transition: 0.2s; }
+        .btn:hover { background-color: #6d0000; }
+        .status { margin-top: 15px; font-size: 14px; font-weight: bold; }
+        #fileNameDisplay { font-style: italic; margin-top: 10px; color: #666; }
+    </style>
+</head>
+<body>
 
+<div class="upload-container">
+    <h1>Cozy Cover Gallery Portal</h1>
+    <p>Share your customized creations directly into the app catalog!</p>
+    
+    <form id="uploadForm">
+        <div class="dropzone">
+            <p style="margin: 0;">📸 Drag & drop your cover here or <strong>browse</strong></p>
+            <p style="font-size: 11px; color: #888; margin: 5px 0 0 0;">Supports PNG or JPG (Max 2MB)</p>
+            <input type="file" id="fileInput" accept=".png, .jpg, .jpeg" required>
+        </div>
+        <div id="fileNameDisplay"></div>
+        <button type="submit" class="btn" id="submitBtn">Submit for Review ✨</button>
+    </form>
+    
+    <div id="statusMessage" class="status"></div>
+</div>
+
+<script>
+    // YOUR CLOUDFLARE WORKER LIVE URL GOES HERE AFTER PHASE 3
+    const WORKER_URL = "https://cozy-cover-backend.YOUR_SUBDOMAIN.workers.dev";
+
+    const fileInput = document.getElementById('fileInput');
+    const fileNameDisplay = document.getElementById('fileNameDisplay');
+    const uploadForm = document.getElementById('uploadForm');
+    const statusMessage = document.getElementById('statusMessage');
+    const submitBtn = document.getElementById('submitBtn');
+
+    fileInput.addEventListener('change', () => {
+        if(fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            if (file.size > 2 * 1024 * 1024) {
+                alert("File is too large! Please ensure it is under 2MB.");
+                fileInput.value = "";
+                fileNameDisplay.textContent = "";
+                return;
+            }
+            fileNameDisplay.textContent = `Selected: ${file.name}`;
+        }
+    });
+
+    uploadForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!fileInput.files.length) return;
+
+        const file = fileInput.files[0];
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Uploading to review vault...";
+        statusMessage.style.color = "black";
+        statusMessage.textContent = "Processing image array...";
+
+        // Convert the image file to base64 safely for transit
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = async () => {
+            const base64Data = reader.result.split(',')[1];
+            
+            try {
+                const response = await fetch(WORKER_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        filename: file.name,
+                        filedata: base64Data
+                    })
+                });
+
+                if (response.ok) {
+                    statusMessage.style.color = "green";
+                    statusMessage.textContent = "🎉 Submitted successfully! It will appear after moderation check.";
+                    uploadForm.reset();
+                    fileNameDisplay.textContent = "";
+                } else {
+                    const errText = await response.text();
+                    statusMessage.style.color = "red";
+                    statusMessage.textContent = `Upload failed: ${errText}`;
+                }
+            } catch (error) {
+                statusMessage.style.color = "red";
+                statusMessage.textContent = "Network error connecting to verification server.";
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = "Submit for Review ✨";
+            }
+        };
+    });
+</script>
+</body>
+</html>
