@@ -1,0 +1,35 @@
+name: Automated Cover Approver
+on:
+  workflow_dispatch:
+    inputs:
+      filename:
+        description: 'The pending filename to approve'
+        required: true
+
+jobs:
+  approve:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository Code
+        uses: actions/checkout@v4
+
+      - name: Process File Name
+        run: |
+          PENDING_NAME="${{ github.event.inputs.filename }}"
+          # Strip the "pending_" prefix from the name string
+          APPROVED_NAME=$(echo "$PENDING_NAME" | sed 's/^pending_[0-9]*_//')
+          
+          echo "Moving file from Covers/$PENDING_NAME to Covers/$APPROVED_NAME"
+          
+          if [ -f "Covers/$PENDING_NAME" ]; then
+            mv "Covers/$PENDING_NAME" "Covers/$APPROVED_NAME"
+            
+            git config --global user.name "CozyBot"
+            git config --global user.email "bot@cozycover.local"
+            git add .
+            git commit -m "Automated System: Approved $APPROVED_NAME"
+            git push
+          else
+            echo "Error: Target file not located inside repository folder."
+            exit 1
+          fi
