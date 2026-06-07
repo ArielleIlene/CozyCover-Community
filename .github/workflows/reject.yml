@@ -1,0 +1,30 @@
+name: Automated Cover Rejecter
+on:
+  workflow_dispatch:
+    inputs:
+      filename:
+        description: 'The pending filename to reject'
+        required: true
+
+jobs:
+  reject:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository Code
+        uses: actions/checkout@v4
+
+      - name: Remove Rejected File
+        run: |
+          PENDING_NAME="${{ github.event.inputs.filename }}"
+          
+          if [ -f "Covers/$PENDING_NAME" ]; then
+            rm "Covers/$PENDING_NAME"
+            
+            git config --global user.name "CozyBot"
+            git config --global user.email "bot@cozycover.local"
+            git add .
+            git commit -m "Automated System: Deleted rejected submission $PENDING_NAME"
+            git push
+          else
+            echo "File already handled or removed."
+          fi
