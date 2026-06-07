@@ -38,8 +38,8 @@
 </div>
 
 <script>
-    // YOUR CLOUDFLARE WORKER LIVE URL GOES HERE AFTER PHASE 3
-    const WORKER_URL = "https://cozy-cover-backend.YOUR_SUBDOMAIN.workers.dev";
+  
+    const WORKER_URL = "https://cozy-cover-backend.arielleilenejohnson.workers.dev";
 
     const fileInput = document.getElementById('fileInput');
     const fileNameDisplay = document.getElementById('fileNameDisplay');
@@ -88,7 +88,7 @@
 
                 if (response.ok) {
                     statusMessage.style.color = "green";
-                    statusMessage.textContent = "🎉 Submitted successfully! It will appear after moderation check.";
+                    statusMessage.textContent = "🎉 Submitted successfully! It will appear after moderation check, thank you!";
                     uploadForm.reset();
                     fileNameDisplay.textContent = "";
                 } else {
@@ -98,7 +98,7 @@
                 }
             } catch (error) {
                 statusMessage.style.color = "red";
-                statusMessage.textContent = "Network error connecting to verification server.";
+                statusMessage.textContent = "Network error connecting to verification server, please try again later.";
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.textContent = "Submit for Review ✨";
