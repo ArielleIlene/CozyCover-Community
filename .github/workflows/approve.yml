@@ -9,6 +9,9 @@ on:
 jobs:
   approve:
     runs-on: ubuntu-latest
+    # Explicitly grant the cloud worker write access to push commits
+    permissions:
+      contents: write
     steps:
       - name: Checkout Repository Code
         uses: actions/checkout@v4
