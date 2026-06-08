@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cozy Cover Portal Review Dashboard</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #FDF5E6; color: #333; text-align: center; padding: 40px 20px; }
+        .card { background: white; max-width: 450px; margin: 0 auto; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); border: 3px solid #7a0000; }
+        h2 { color: #7a0000; margin-top: 0; }
+        img { max-width: 100%; max-height: 300px; border-radius: 6px; margin: 15px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .filename { background: #eee; padding: 8px; border-radius: 4px; font-family: monospace; word-break: break-all; font-size: 14px; }
+        button { display: block; width: 100%; padding: 16px; margin: 15px 0; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: transform 0.1s; }
+        button:active { transform: scale(0.98); }
+        .btn-approve { background: #2e7d32; color: white; }
+        .btn-reject { background: #c62828; color: white; }
+        #status { margin-top: 15px; font-weight: bold; font-size: 15px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>Review Portal Command</h2>
+    <p>Incoming Community Submission:</p>
+    <div class="filename" id="fileDisplay">Loading payload target...</div>
+    
+    <img id="previewImg" src="" alt="Submission Preview" style="display:none;">
+
+    <button class="btn-approve" onclick="triggerWorkflow('approve.yml')">✅ One-Tap Approve & Make Live</button>
+    <button class="btn-reject" onclick="triggerWorkflow('reject.yml')">❌ One-Tap Reject & Delete</button>
+    
+    <div id="status"></div>
+</div>
+
+<script>
+    // Automatically extract target variables straight from the Discord link structure
+    const urlParams = new URLSearchParams(window.location.search);
+    const filename = urlParams.get('file');
+    const owner = urlParams.get('owner');
+    const repo = urlParams.get('repo');
+    const workerUrl = urlParams.get('worker');
+
+    if (filename) {
+        document.getElementById('fileDisplay').innerText = filename;
+        const imgEl = document.getElementById('previewImg');
+        imgEl.src = `https://raw.githubusercontent.com/${owner}/${repo}/main/Covers/${filename}`;
+        imgEl.style.display = "inline-block";
+    }
+
+    async function triggerWorkflow(workflowName) {
+        const statusDiv = document.getElementById('status');
+        statusDiv.style.color = "orange";
+        statusDiv.innerText = "⚡ Dispatched instruction packet to cloud bot...";
+
+        try {
+            // Let your backend worker make the secure authenticated request on your behalf
+            const response = await fetch(`${workerUrl}/dispatch`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ workflow: workflowName, filename: filename })
+            });
+
+            if (response.ok) {
+                statusDiv.style.color = "green";
+                statusDiv.innerText = "🎉 Action processed! Execution engine running successfully.";
+            } else {
+                const text = await response.text();
+                statusDiv.style.color = "red";
+                statusDiv.innerText = `⚠️ Dispatch Failure: ${text}`;
+            }
+        } catch (err) {
+            statusDiv.style.color = "red";
+            statusDiv.innerText = `Network Mismatch: ${err.message}`;
+        }
+    }
+</script>
+</body>
+</html>
