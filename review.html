@@ -27,10 +27,11 @@
         
         /* Checkbox Indicator */
         .checkbox-indicator { position: absolute; top: 15px; left: 15px; width: 22px; height: 22px; background: white; border: 2px solid #aaa; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; font-size: 14px; }
-        .cover-card.selected .checkbox-indicator { background: #2e7d32; border-color: #2e7d32; content: "✓"; }
+        .cover-card.selected .checkbox-indicator { background: #2e7d32; border-color: #2e7d32; }
+        .cover-card.selected .checkbox-indicator::after { content: "✓"; color: white; font-weight: bold; }
         
         /* Magnify Button */
-        .magnify-btn { position: absolute; top: 15px; right: 15px; width: 26px; height: 26px; background: rgba(0,0,0,0.6); color: white; border-radius: 50%; border: none; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .magnify-btn { position: absolute; top: 15px; right: 15px; width: 26px; height: 26px; background: rgba(0,0,0,0.6); color: white; border-radius: 50%; border: none; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 5; }
         .magnify-btn:hover { background: rgba(0,0,0,0.8); }
 
         /* Full Screen Preview Modal */
@@ -60,15 +61,15 @@
 
 <div id="previewModal" class="modal" onclick="closeLargePreview()">
     <span class="close-modal">&times;</span>
-    <img class="modal-content" id="modalTargetImg">
+    <img class="modal-content" id="modalTargetImg" alt="Large Preview">
 </div>
 
 <script>
-    // Automatically read config parameters directly from incoming url strings
+    // Automatically read parameters or use your verified configuration targets as solid fallbacks
     const urlParams = new URLSearchParams(window.location.search);
-    const owner = urlParams.get('owner') || "YOUR_GITHUB_USERNAME"; 
+    const owner = urlParams.get('owner') || "ArielleIlene"; 
     const repo = urlParams.get('repo') || "CozyCover-Community";
-    const workerUrl = urlParams.get('worker') || `https://cozy-cover-backend.${owner.toLowerCase()}.workers.dev`;
+    const workerUrl = urlParams.get('worker') || "https://cozy-cover-backend.arielleilenejohnson.workers.dev";
 
     let selectedFiles = new Set();
 
@@ -82,7 +83,7 @@
             if (!response.ok) throw new Error("Could not load folder directory.");
             
             const files = await response.json();
-            // Filter strictly for images starting with pending_
+            // Filter strictly for files inside Covers starting with pending_
             const pendingItems = files.filter(f => f.name.toLowerCase().startsWith('pending_') && f.name.toLowerCase().match(/\.(jpg|jpeg|png)$/));
             
             grid.innerHTML = "";
@@ -92,7 +93,7 @@
                 return;
             }
             
-            status.innerText = `Found ${pendingItems.length} pending submission(s). Tap to select/deselect.`;
+            status.innerText = `Found ${pendingItems.length} pending submission(s). Tap cards to toggle selection.`;
             document.getElementById('btnGroup').style.display = "block";
             
             pendingItems.forEach(item => {
@@ -102,16 +103,19 @@
                 card.className = 'cover-card';
                 card.dataset.filename = item.name;
                 card.onclick = (e) => {
-                    // Prevent card selection trigger if hitting the magnifying zoom bubble
+                    // Prevent card selection trigger if hitting the magnifying zoom bubble button
                     if (e.target.classList.contains('magnify-btn')) return;
                     toggleSelection(card, item.name);
                 };
+
+                // Clean the text tag below the image for aesthetics
+                const userVisibleLabel = item.name.replace(/^pending_\d+_/i, '');
 
                 card.innerHTML = `
                     <div class="checkbox-indicator"></div>
                     <button class="magnify-btn" onclick="openLargePreview('${imgUrl}')">🔍</button>
                     <img src="${imgUrl}" alt="Preview">
-                    <span class="label">${item.name.split('_').slice(2).join('_')}</span>
+                    <span class="label">${userVisibleLabel}</span>
                 `;
                 grid.appendChild(card);
             });
@@ -125,17 +129,15 @@
         if (selectedFiles.has(filename)) {
             selectedFiles.delete(filename);
             card.classList.remove('selected');
-            card.querySelector('.checkbox-indicator').innerText = "";
         } else {
             selectedFiles.add(filename);
             card.classList.add('selected');
-            card.querySelector('.checkbox-indicator').innerText = "✓";
         }
         document.getElementById('selectCount').innerText = selectedFiles.size;
     }
 
     function openLargePreview(url) {
-        event.stopPropagation();
+        window.event.stopPropagation();
         document.getElementById('modalTargetImg').src = url;
         document.getElementById('previewModal').style.display = "flex";
     }
@@ -144,7 +146,7 @@
         document.getElementById('previewModal').style.display = "none";
     }
 
-    // Sequence loop dispatch to handle multiple targets cleanly via Cloudflare backend routers
+    // Process select array items cleanly sequentially back to back via Cloudflare proxy routers
     async function processBatch(workflowFile) {
         if (selectedFiles.size === 0) {
             alert("Please pick at least one cover file card to process!");
@@ -173,5 +175,13 @@
             }
         }
         
-        status.innerText = "🎉 Processing finished! Refreshing layout grid in 5 seconds...";
-        selected
+        status.innerText = "🎉 Processing complete! Reloading queue grid components in 5 seconds...";
+        selectedFiles.clear();
+        document.getElementById('selectCount').innerText = "0";
+        setTimeout(loadPendingQueue, 5000);
+    }
+
+    window.onload = loadPendingQueue;
+</script>
+</body>
+</html>
