@@ -1,30 +1,42 @@
-name: Automated Cover Rejecter
+name: Automated Cover Rejection & Workspace Cleanup
 on:
   workflow_dispatch:
     inputs:
       filename:
-        description: 'The pending filename to reject'
+        description: 'Target filename to delete, or type "CLEAR_ALL" to purge all pending files'
         required: true
 
 jobs:
   reject:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout Repository Code
         uses: actions/checkout@v4
 
-      - name: Remove Rejected File
+      - name: Execute Purge Sequence
         run: |
-          PENDING_NAME="${{ github.event.inputs.filename }}"
+          TARGET="${{ github.event.inputs.filename }}"
           
-          if [ -f "Covers/$PENDING_NAME" ]; then
-            rm "Covers/$PENDING_NAME"
-            
-            git config --global user.name "CozyBot"
-            git config --global user.email "bot@cozycover.local"
+          git config --global user.name "CozyBot"
+          git config --global user.email "bot@cozycover.local"
+          
+          if [ "$TARGET" = "CLEAR_ALL" ]; then
+            echo "⚠️ Initiating complete sweep of all pending submissions..."
+            # Safely look inside Covers/ and delete anything starting with pending_
+            rm -f Covers/pending_*
             git add .
-            git commit -m "Automated System: Deleted rejected submission $PENDING_NAME"
+            git commit -m "Automated System: Purged all unapproved pending submissions"
             git push
           else
-            echo "File already handled or removed."
+            echo "Removing target file: Covers/$TARGET"
+            if [ -f "Covers/$TARGET" ]; then
+              rm "Covers/$TARGET"
+              git add .
+              git commit -m "Automated System: Rejected $TARGET"
+              git push
+            else
+              echo "Target file not found or already processed."
+            fi
           fi
