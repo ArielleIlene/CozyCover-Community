@@ -3,76 +3,175 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cozy Cover Portal Review Dashboard</title>
+    <title>Cozy Cover Bulk Review Panel</title>
     <style>
-        body { font-family: -apple-system, sans-serif; background: #FDF5E6; color: #333; text-align: center; padding: 40px 20px; }
-        .card { background: white; max-width: 450px; margin: 0 auto; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); border: 3px solid #7a0000; }
-        h2 { color: #7a0000; margin-top: 0; }
-        img { max-width: 100%; max-height: 300px; border-radius: 6px; margin: 15px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        .filename { background: #eee; padding: 8px; border-radius: 4px; font-family: monospace; word-break: break-all; font-size: 14px; }
-        button { display: block; width: 100%; padding: 16px; margin: 15px 0; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: transform 0.1s; }
-        button:active { transform: scale(0.98); }
+        body { font-family: -apple-system, sans-serif; background: #FDF5E6; color: #333; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; }
+        h1 { color: #7a0000; text-align: center; margin-bottom: 5px; }
+        .subtitle { text-align: center; color: #555; margin-bottom: 25px; font-style: italic; }
+        
+        /* Action Bar floating at top */
+        .action-bar { background: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 10px; z-index: 10; border: 2px solid #7a0000; margin-bottom: 25px; }
+        .btn-group button { padding: 10px 18px; margin-left: 10px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
         .btn-approve { background: #2e7d32; color: white; }
         .btn-reject { background: #c62828; color: white; }
-        #status { margin-top: 15px; font-weight: bold; font-size: 15px; }
+        
+        /* Grid Layout */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 20px; }
+        .cover-card { background: white; border: 2px solid #e0e0e0; border-radius: 8px; padding: 10px; text-align: center; cursor: pointer; position: relative; transition: all 0.2s; }
+        .cover-card:hover { border-color: #7a0000; transform: translateY(-2px); }
+        .cover-card.selected { border-color: #2e7d32; background: #e8f5e9; box-shadow: 0 0 0 2px #2e7d32; }
+        
+        .cover-card img { width: 100%; height: 200px; object-fit: cover; border-radius: 4px; }
+        .cover-card .label { font-size: 11px; font-family: monospace; word-break: break-all; margin-top: 8px; color: #666; display: block; }
+        
+        /* Checkbox Indicator */
+        .checkbox-indicator { position: absolute; top: 15px; left: 15px; width: 22px; height: 22px; background: white; border: 2px solid #aaa; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; font-size: 14px; }
+        .cover-card.selected .checkbox-indicator { background: #2e7d32; border-color: #2e7d32; content: "✓"; }
+        
+        /* Magnify Button */
+        .magnify-btn { position: absolute; top: 15px; right: 15px; width: 26px; height: 26px; background: rgba(0,0,0,0.6); color: white; border-radius: 50%; border: none; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .magnify-btn:hover { background: rgba(0,0,0,0.8); }
+
+        /* Full Screen Preview Modal */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; align-items: center; justify-content: center; }
+        .modal-content { max-width: 90%; max-height: 85%; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        .close-modal { position: absolute; top: 20px; right: 30px; color: white; font-size: 40px; font-weight: bold; cursor: pointer; }
+        
+        #status-msg { font-weight: bold; font-size: 14px; }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <h2>Review Portal Command</h2>
-    <p>Incoming Community Submission:</p>
-    <div class="filename" id="fileDisplay">Loading payload target...</div>
-    
-    <img id="previewImg" src="" alt="Submission Preview" style="display:none;">
+<div class="container">
+    <h1>Cozy Management Control Center</h1>
+    <p class="subtitle">Select items to batch process your community layout queue</p>
 
-    <button class="btn-approve" onclick="triggerWorkflow('approve.yml')">✅ One-Tap Approve & Make Live</button>
-    <button class="btn-reject" onclick="triggerWorkflow('reject.yml')">❌ One-Tap Reject & Delete</button>
-    
-    <div id="status"></div>
+    <div class="action-bar">
+        <div id="status-msg">Fetching files from GitHub directory...</div>
+        <div class="btn-group" id="btnGroup" style="display: none;">
+            <button class="btn-approve" onclick="processBatch('approve.yml')">✅ Bulk Approve (<span id="selectCount">0</span>)</button>
+            <button class="btn-reject" onclick="processBatch('reject.yml')">❌ Bulk Delete</button>
+        </div>
+    </div>
+
+    <div class="grid" id="coversGrid"></div>
+</div>
+
+<div id="previewModal" class="modal" onclick="closeLargePreview()">
+    <span class="close-modal">&times;</span>
+    <img class="modal-content" id="modalTargetImg">
 </div>
 
 <script>
-    // Automatically extract target variables straight from the Discord link structure
+    // Automatically read config parameters directly from incoming url strings
     const urlParams = new URLSearchParams(window.location.search);
-    const filename = urlParams.get('file');
-    const owner = urlParams.get('owner');
-    const repo = urlParams.get('repo');
-    const workerUrl = urlParams.get('worker');
+    const owner = urlParams.get('owner') || "YOUR_GITHUB_USERNAME"; 
+    const repo = urlParams.get('repo') || "CozyCover-Community";
+    const workerUrl = urlParams.get('worker') || `https://cozy-cover-backend.${owner.toLowerCase()}.workers.dev`;
 
-    if (filename) {
-        document.getElementById('fileDisplay').innerText = filename;
-        const imgEl = document.getElementById('previewImg');
-        imgEl.src = `https://raw.githubusercontent.com/${owner}/${repo}/main/Covers/${filename}`;
-        imgEl.style.display = "inline-block";
-    }
+    let selectedFiles = new Set();
 
-    async function triggerWorkflow(workflowName) {
-        const statusDiv = document.getElementById('status');
-        statusDiv.style.color = "orange";
-        statusDiv.innerText = "⚡ Dispatched instruction packet to cloud bot...";
-
+    // Fetch pending images automatically via GitHub public contents API endpoint
+    async function loadPendingQueue() {
+        const grid = document.getElementById('coversGrid');
+        const status = document.getElementById('status-msg');
+        
         try {
-            // Let your backend worker make the secure authenticated request on your behalf
-            const response = await fetch(`${workerUrl}/dispatch`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ workflow: workflowName, filename: filename })
-            });
-
-            if (response.ok) {
-                statusDiv.style.color = "green";
-                statusDiv.innerText = "🎉 Action processed! Execution engine running successfully.";
-            } else {
-                const text = await response.text();
-                statusDiv.style.color = "red";
-                statusDiv.innerText = `⚠️ Dispatch Failure: ${text}`;
+            const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/Covers`);
+            if (!response.ok) throw new Error("Could not load folder directory.");
+            
+            const files = await response.json();
+            // Filter strictly for images starting with pending_
+            const pendingItems = files.filter(f => f.name.toLowerCase().startsWith('pending_') && f.name.toLowerCase().match(/\.(jpg|jpeg|png)$/));
+            
+            grid.innerHTML = "";
+            if (pendingItems.length === 0) {
+                status.innerText = "✨ Queue completely clear! No covers waiting for review.";
+                document.getElementById('btnGroup').style.display = "none";
+                return;
             }
+            
+            status.innerText = `Found ${pendingItems.length} pending submission(s). Tap to select/deselect.`;
+            document.getElementById('btnGroup').style.display = "block";
+            
+            pendingItems.forEach(item => {
+                const imgUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/Covers/${item.name}`;
+                
+                const card = document.createElement('div');
+                card.className = 'cover-card';
+                card.dataset.filename = item.name;
+                card.onclick = (e) => {
+                    // Prevent card selection trigger if hitting the magnifying zoom bubble
+                    if (e.target.classList.contains('magnify-btn')) return;
+                    toggleSelection(card, item.name);
+                };
+
+                card.innerHTML = `
+                    <div class="checkbox-indicator"></div>
+                    <button class="magnify-btn" onclick="openLargePreview('${imgUrl}')">🔍</button>
+                    <img src="${imgUrl}" alt="Preview">
+                    <span class="label">${item.name.split('_').slice(2).join('_')}</span>
+                `;
+                grid.appendChild(card);
+            });
+            
         } catch (err) {
-            statusDiv.style.color = "red";
-            statusDiv.innerText = `Network Mismatch: ${err.message}`;
+            status.innerText = `Failed to connect to storage: ${err.message}`;
         }
     }
-</script>
-</body>
-</html>
+
+    function toggleSelection(card, filename) {
+        if (selectedFiles.has(filename)) {
+            selectedFiles.delete(filename);
+            card.classList.remove('selected');
+            card.querySelector('.checkbox-indicator').innerText = "";
+        } else {
+            selectedFiles.add(filename);
+            card.classList.add('selected');
+            card.querySelector('.checkbox-indicator').innerText = "✓";
+        }
+        document.getElementById('selectCount').innerText = selectedFiles.size;
+    }
+
+    function openLargePreview(url) {
+        event.stopPropagation();
+        document.getElementById('modalTargetImg').src = url;
+        document.getElementById('previewModal').style.display = "flex";
+    }
+
+    function closeLargePreview() {
+        document.getElementById('previewModal').style.display = "none";
+    }
+
+    // Sequence loop dispatch to handle multiple targets cleanly via Cloudflare backend routers
+    async function processBatch(workflowFile) {
+        if (selectedFiles.size === 0) {
+            alert("Please pick at least one cover file card to process!");
+            return;
+        }
+
+        const status = document.getElementById('status-msg');
+        const itemsToProcess = Array.from(selectedFiles);
+        status.innerText = `Processing batch: 0 / ${itemsToProcess.length}... ⚡`;
+        
+        let completed = 0;
+        for (const file of itemsToProcess) {
+            try {
+                const response = await fetch(`${workerUrl}/dispatch`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ workflow: workflowFile, filename: file })
+                });
+                
+                if (response.ok) {
+                    completed++;
+                    status.innerText = `Processing batch: ${completed} / ${itemsToProcess.length}... ⚡`;
+                }
+            } catch (e) {
+                console.error(`Failed handling file ${file}:`, e);
+            }
+        }
+        
+        status.innerText = "🎉 Processing finished! Refreshing layout grid in 5 seconds...";
+        selected
