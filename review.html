@@ -184,4 +184,154 @@
     window.onload = loadPendingQueue;
 </script>
 </body>
+</html>        /* Full Screen Preview Modal */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; align-items: center; justify-content: center; }
+        .modal-content { max-width: 90%; max-height: 85%; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        .close-modal { position: absolute; top: 20px; right: 30px; color: white; font-size: 40px; font-weight: bold; cursor: pointer; }
+        
+        #status-msg { font-weight: bold; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Cozy Management Control Center</h1>
+    <p class="subtitle">Select items to batch process your community layout queue</p>
+
+    <div class="action-bar">
+        <div id="status-msg">Fetching files from GitHub directory...</div>
+        <div class="btn-group" id="btnGroup" style="display: none;">
+            <button class="btn-approve" onclick="processBatch('approve.yml')">✅ Bulk Approve (<span id="selectCount">0</span>)</button>
+            <button class="btn-reject" onclick="processBatch('reject.yml')">❌ Bulk Delete</button>
+        </div>
+    </div>
+
+    <div class="grid" id="coversGrid"></div>
+</div>
+
+<div id="previewModal" class="modal" onclick="closeLargePreview()">
+    <span class="close-modal">&times;</span>
+    <img class="modal-content" id="modalTargetImg" alt="Large Preview">
+</div>
+
+<script>
+    // Automatically read parameters or use your verified configuration targets as solid fallbacks
+    const urlParams = new URLSearchParams(window.location.search);
+    const owner = urlParams.get('owner') || "ArielleIlene"; 
+    const repo = urlParams.get('repo') || "CozyCover-Community";
+    const workerUrl = urlParams.get('worker') || "https://cozy-cover-backend.arielleilenejohnson.workers.dev";
+
+    let selectedFiles = new Set();
+
+    // Fetch pending images automatically via GitHub public contents API endpoint
+    async function loadPendingQueue() {
+        const grid = document.getElementById('coversGrid');
+        const status = document.getElementById('status-msg');
+        
+        try {
+            const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/Covers`);
+            if (!response.ok) throw new Error("Could not load folder directory.");
+            
+            const files = await response.json();
+            // Filter strictly for files inside Covers starting with pending_
+            const pendingItems = files.filter(f => f.name.toLowerCase().startsWith('pending_') && f.name.toLowerCase().match(/\.(jpg|jpeg|png)$/));
+            
+            grid.innerHTML = "";
+            if (pendingItems.length === 0) {
+                status.innerText = "✨ Queue completely clear! No covers waiting for review.";
+                document.getElementById('btnGroup').style.display = "none";
+                return;
+            }
+            
+            status.innerText = `Found ${pendingItems.length} pending submission(s). Tap cards to toggle selection.`;
+            document.getElementById('btnGroup').style.display = "block";
+            
+            pendingItems.forEach(item => {
+                const imgUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/Covers/${item.name}`;
+                
+                const card = document.createElement('div');
+                card.className = 'cover-card';
+                card.dataset.filename = item.name;
+                card.onclick = (e) => {
+                    // Prevent card selection trigger if hitting the magnifying zoom bubble button
+                    if (e.target.classList.contains('magnify-btn')) return;
+                    toggleSelection(card, item.name);
+                };
+
+                // Clean the text tag below the image for aesthetics
+                const userVisibleLabel = item.name.replace(/^pending_\d+_/i, '');
+
+                card.innerHTML = `
+                    <div class="checkbox-indicator"></div>
+                    <button class="magnify-btn" onclick="openLargePreview('${imgUrl}')">🔍</button>
+                    <img src="${imgUrl}" alt="Preview">
+                    <span class="label">${userVisibleLabel}</span>
+                `;
+                grid.appendChild(card);
+            });
+            
+        } catch (err) {
+            status.innerText = `Failed to connect to storage: ${err.message}`;
+        }
+    }
+
+    function toggleSelection(card, filename) {
+        if (selectedFiles.has(filename)) {
+            selectedFiles.delete(filename);
+            card.classList.remove('selected');
+        } else {
+            selectedFiles.add(filename);
+            card.classList.add('selected');
+        }
+        document.getElementById('selectCount').innerText = selectedFiles.size;
+    }
+
+    function openLargePreview(url) {
+        window.event.stopPropagation();
+        document.getElementById('modalTargetImg').src = url;
+        document.getElementById('previewModal').style.display = "flex";
+    }
+
+    function closeLargePreview() {
+        document.getElementById('previewModal').style.display = "none";
+    }
+
+    // Process select array items cleanly sequentially back to back via Cloudflare proxy routers
+    async function processBatch(workflowFile) {
+        if (selectedFiles.size === 0) {
+            alert("Please pick at least one cover file card to process!");
+            return;
+        }
+
+        const status = document.getElementById('status-msg');
+        const itemsToProcess = Array.from(selectedFiles);
+        status.innerText = `Processing batch: 0 / ${itemsToProcess.length}... ⚡`;
+        
+        let completed = 0;
+        for (const file of itemsToProcess) {
+            try {
+                const response = await fetch(`${workerUrl}/dispatch`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ workflow: workflowFile, filename: file })
+                });
+                
+                if (response.ok) {
+                    completed++;
+                    status.innerText = `Processing batch: ${completed} / ${itemsToProcess.length}... ⚡`;
+                }
+            } catch (e) {
+                console.error(`Failed handling file ${file}:`, e);
+            }
+        }
+        
+        status.innerText = "🎉 Processing complete! Reloading queue grid components in 5 seconds...";
+        selectedFiles.clear();
+        document.getElementById('selectCount').innerText = "0";
+        setTimeout(loadPendingQueue, 5000);
+    }
+
+    window.onload = loadPendingQueue;
+</script>
+</body>
 </html>
