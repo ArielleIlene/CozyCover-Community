@@ -12,8 +12,10 @@
         
         /* Action Bar floating at top */
         .action-bar { background: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 10px; z-index: 10; border: 2px solid #7a0000; margin-bottom: 25px; }
-        .btn-group button { padding: 12px 22px; margin-left: 10px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 15px; }
+        .btn-group { display: flex; gap: 10px; }
+        .btn-group button { padding: 12px 20px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px; }
         .btn-approve { background: #2e7d32; color: white; }
+        .btn-clear-all { background: #c62828; color: white; }
         
         /* Grid Layout */
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 20px; }
@@ -45,12 +47,13 @@
 
 <div class="container">
     <h1>Cozy Management Control Center</h1>
-    <p class="subtitle">Select the files you want to keep. All unselected pending files will be automatically deleted.</p>
+    <p class="subtitle">Approve your chosen covers first, then use Clear All to safely sweep away remaining entries.</p>
 
     <div class="action-bar">
         <div id="status-msg">Fetching files from GitHub directory...</div>
         <div class="btn-group" id="btnGroup" style="display: none;">
-            <button class="btn-approve" onclick="processBatchAndCleanup()">✅ Approve Selected & Clear Rest (<span id="selectCount">0</span>)</button>
+            <button class="btn-approve" onclick="approveSelected()">✅ Approve Selected (<span id="selectCount">0</span>)</button>
+            <button class="btn-clear-all" onclick="clearAllPending()">🧹 Clear All Pending</button>
         </div>
     </div>
 
@@ -68,7 +71,6 @@
     const repo = urlParams.get('repo') || "CozyCover-Community";
     const workerUrl = urlParams.get('worker') || "https://cozy-cover-backend.arielleilenejohnson.workers.dev";
 
-    let allPendingFiles = [];
     let selectedFiles = new Set();
 
     async function loadPendingQueue() {
@@ -82,8 +84,9 @@
             const files = await response.json();
             const pendingItems = files.filter(f => f.name.toLowerCase().startsWith('pending_') && f.name.toLowerCase().match(/\.(jpg|jpeg|png)$/));
             
-            allPendingFiles = pendingItems.map(item => item.name);
             grid.innerHTML = "";
+            selectedFiles.clear();
+            document.getElementById('selectCount').innerText = "0";
             
             if (pendingItems.length === 0) {
                 status.innerText = "✨ Queue completely clear! No covers waiting for review.";
@@ -91,8 +94,8 @@
                 return;
             }
             
-            status.innerText = `Found ${pendingItems.length} pending submission(s). Select what you want to KEEP.`;
-            document.getElementById('btnGroup').style.display = "block";
+            status.innerText = `Found ${pendingItems.length} pending submission(s).`;
+            document.getElementById('btnGroup').style.display = "flex";
             
             pendingItems.forEach(item => {
                 const imgUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/Covers/${item.name}`;
@@ -138,19 +141,18 @@
         document.getElementById('previewModal').style.display = "flex";
     }
 
-    document.addEventListener('keydown', function(e) {
-        if (e.key === "Escape") closeLargePreview();
-    });
-
     function closeLargePreview() {
         document.getElementById('previewModal').style.display = "none";
     }
 
-    async function processBatchAndCleanup() {
+    async function approveSelected() {
+        if (selectedFiles.size === 0) {
+            alert("Please tap to highlight at least one cover to approve!");
+            return;
+        }
+
         const status = document.getElementById('status-msg');
-        const unselectedFiles = allPendingFiles.filter(file => !selectedFiles.has(file));
-        
-        status.innerText = `Processing updates... ⚡`;
+        status.innerText = `Processing selections... ⚡`;
         
         let completed = 0;
         for (const file of Array.from(selectedFiles)) {
@@ -165,23 +167,35 @@
             } catch (e) { console.error(e); }
         }
         
-        let deleted = 0;
-        for (const file of unselectedFiles) {
-            try {
-                await fetch(`${workerUrl}/dispatch`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ workflow: "reject.yml", filename: file })
-                });
-                deleted++;
-                status.innerText = `Clearing away unapproved queue items (${deleted}/${unselectedFiles.length})... 🧹`;
-            } catch (e) { console.error(e); }
-        }
+        status.innerText = "🎉 Selected items approved! Reloading list in 5 seconds...";
+        setTimeout(loadPendingQueue, 5000);
+    }
+
+    async function clearAllPending() {
+        // Confirmation Safety Prompt Box
+        const checkSure = confirm("⚠️ Are you completely sure you want to clear the entire queue? This will permanently delete ALL pending covers currently displayed below!");
         
-        status.innerText = "🎉 All actions successfully routed! Refreshing interface grid in 6 seconds...";
-        selectedFiles.clear();
-        document.getElementById('selectCount').innerText = "0";
-        setTimeout(loadPendingQueue, 6000);
+        if (!checkSure) return; // User selected cancel, stop execution.
+
+        const status = document.getElementById('status-msg');
+        status.innerText = "🧹 Dispatched workspace sweep engine command to GitHub cloud bot...";
+
+        try {
+            const response = await fetch(`${workerUrl}/dispatch`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ workflow: "reject.yml", filename: "CLEAR_ALL" })
+            });
+
+            if (response.ok) {
+                status.innerText = "🚀 Purge script running on GitHub runner! Refreshing layout in 6 seconds...";
+                setTimeout(loadPendingQueue, 6000);
+            } else {
+                status.innerText = "⚠️ Server pipeline failed to start cleanup sequence.";
+            }
+        } catch (e) {
+            status.innerText = `Network communication error: ${e.message}`;
+        }
     }
 
     window.onload = loadPendingQueue;
